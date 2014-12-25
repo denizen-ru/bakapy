@@ -1,8 +1,10 @@
 package bakapy
 
 import (
+	"fmt"
 	"io/ioutil"
 	"os"
+	"os/user"
 	"testing"
 )
 
@@ -49,5 +51,36 @@ func TestRunJob_MetadataDirDoesNotExist(t *testing.T) {
 	_, err := LoadJobMetadata(metadataPath)
 	if err == nil {
 		t.Fatal("metadata loaded but not expected")
+	}
+}
+
+func TestSendFailedJobNotification(t *testing.T) {
+	type testpair struct {
+		cfg SMTPConfig
+		msg string
+	}
+	localUser, err := user.Current()
+	if err != nil {
+		localUser = &user.User{"0", "0", "root", "root", "/root"}
+	}
+	localEmail := fmt.Sprintf("%s@localhost", localUser.Username)
+	fromEmail := "bakapy@localhost"
+	var tests = []testpair{
+		{SMTPConfig{}, "without parameters"},
+		{SMTPConfig{"localhost", 25, fromEmail, localEmail}, "with all parameters"},
+		{SMTPConfig{"localhost", 25, fromEmail, "bakapy@mailforspam.com"}, "with outer email"},
+	}
+
+	meta := &JobMetadata{
+		JobName: "test J0b",
+		Message: "testing message",
+		Output:  []byte("some output"),
+		Errput:  []byte("some errput"),
+	}
+
+	for _, pair := range tests {
+		if err := SendFailedJobNotification(pair.cfg, meta); err != nil {
+			t.Error("Notification sending failed while testing", pair.msg)
+		}
 	}
 }

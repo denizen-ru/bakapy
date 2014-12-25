@@ -40,13 +40,25 @@ type NotificationTemplateContext struct {
 }
 
 func SendFailedJobNotification(cfg SMTPConfig, meta *JobMetadata) error {
-	curUser, err := user.Current()
-	if err != nil {
-		return err
+	if cfg.MailTo == "" {
+		curUser, err := user.Current()
+		if err != nil {
+			curUser = &user.User{"0", "0", "root", "root", "/root"}
+		}
+		cfg.MailTo = curUser.Name
 	}
 
 	if cfg.Host == "" {
-		cfg.Host = "127.0.0.1"
+		hostname, err := os.Hostname()
+		if err != nil {
+			cfg.Host = "localhost"
+		} else {
+			cfg.Host = hostname
+		}
+	}
+
+	if cfg.MailFrom == "" {
+		cfg.MailFrom = fmt.Sprintf("bakapy@%s", cfg.Host)
 	}
 
 	if cfg.Port == 0 {
@@ -59,12 +71,12 @@ func SendFailedJobNotification(cfg SMTPConfig, meta *JobMetadata) error {
 		return err
 	}
 
-	err = conn.Mail(curUser.Name)
+	err = conn.Mail(cfg.MailFrom)
 	if err != nil {
 		return err
 	}
 
-	err = conn.Rcpt(curUser.Name)
+	err = conn.Rcpt(cfg.MailTo)
 	if err != nil {
 		return err
 	}
@@ -75,9 +87,9 @@ func SendFailedJobNotification(cfg SMTPConfig, meta *JobMetadata) error {
 	}
 
 	err = MAIL_TEMPLATE_JOB_FAILED.Execute(ds, NotificationTemplateContext{
-		From:    curUser.Name,
-		To:      curUser.Name,
-		Subject: fmt.Sprintf("[bakapy] job %s failed", meta.JobName),
+		From:    cfg.MailFrom,
+		To:      cfg.MailTo,
+		Subject: fmt.Sprintf("[bakapy] job '%s' failed", meta.JobName),
 		Message: meta.Message,
 		Output:  string(meta.Output),
 		Errput:  string(meta.Errput),
