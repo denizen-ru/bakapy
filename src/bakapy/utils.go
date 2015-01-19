@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"github.com/op/go-logging"
 	"log/syslog"
+	"math/rand"
 	"net/smtp"
 	"os"
 	"os/user"
 	"path"
 	"strings"
+	"time"
 )
 
 func SetupLogging(logLevel string) error {
@@ -135,7 +137,7 @@ func RunJob(jobName string, jConfig *JobConfig, gConfig *Config, storage *Storag
 	logger := logging.MustGetLogger("bakapy.job")
 	executor := jConfig.executor
 	if executor == nil {
-		executor = NewBashExecutor(jConfig.Args, jConfig.Host, jConfig.Port, jConfig.Sudo)
+		executor = NewBashExecutor(jConfig.Args, jConfig.Host, jConfig.Port, jConfig.Sudo, gConfig.CommandDir, &jConfig.RemoteFilters)
 	}
 	job := NewJob(
 		jobName, jConfig, gConfig.Listen,
@@ -160,4 +162,33 @@ func RunJob(jobName string, jConfig *JobConfig, gConfig *Config, storage *Storag
 		logger.Info("job '%s' finished", job.Name)
 	}
 	return saveTo
+}
+
+var stuff = []rune("0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+
+func randStr(length int) string {
+	raw := make([]rune, length)
+	rand.Seed(int64(time.Now().Unix()))
+	for i := range raw {
+		raw[i] = stuff[rand.Intn(len(stuff))]
+	}
+	return string(raw)
+}
+
+func argsToString(args Filter) string {
+	if len(args.Params) < 1 {
+		return ""
+	}
+
+	result := ""
+	for key, value := range args.Params {
+		result = result + " ARG_" + strings.ToUpper(key) + "=" + value
+	}
+	return result
+}
+
+func (cfg *Config) checkTempDirExistance() error {
+	// ...and mkdir it, if it's not exist
+	// example: ssh user@192.168.10.149 'test -d ~/.ssh' && echo 1 || echo 0
+	return nil
 }
